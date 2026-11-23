@@ -1,0 +1,16 @@
+{
+  "name": "filmae — vintage booth",
+  "short_name": "filmae",
+  "description": "A soft, nostalgic 4-strip photobooth PWA with analog film filters.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdf6ee",
+  "theme_color": "#fbe9ec",
+  "icons": [
+    { "src": "icons/icon.svg",     "type": "image/svg+xml", "sizes": "any", "purpose": "any maskable" },
+    { "src": "icons/icon-192.png", "type": "image/png",     "sizes": "192x192", "purpose": "any" },
+    { "src": "icons/icon-512.png", "type": "image/png",     "sizes": "512x512", "purpose": "any" }
+  ]
+}
