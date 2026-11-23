@@ -1,7 +1,7 @@
 /* filmae — service worker
    Basic offline caching of the app shell. */
 
-const CACHE = 'filmae-v1';
+const CACHE = 'filmae-v2';
 const ASSETS = [
   './',
   './index.html',

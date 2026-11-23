@@ -45,6 +45,7 @@ const shutterAudio  = document.getElementById('shutterAudio');
 // ---------- state ----------
 const state = {
   preset: 'warm',
+  strip: 'cream',           // strip paper style key (see STRIPS)
   timer: 3,                 // 3, 5, 10
   shots: [],                // captured raw frames as ImageData (4 total)
   busy: false,
@@ -148,8 +149,163 @@ const PRESETS = {
     tint: 'rgba(255, 250, 240, 0.06)',
     fade: 'rgba(245, 245, 245, 0.08)',
     leak: false,
+  },
+  golden: {
+    label: 'Golden Hour',
+    filter: 'sepia(0.28) saturate(1.25) contrast(0.95) brightness(1.06)',
+    tint: 'rgba(255, 185, 90, 0.14)',
+    fade: 'rgba(255, 235, 200, 0.08)',
+    leak: true,
+  },
+  lavender: {
+    label: 'Lavender',
+    filter: 'saturate(0.88) contrast(0.9) brightness(1.08)',
+    tint: 'rgba(185, 160, 240, 0.18)',
+    fade: 'rgba(240, 230, 255, 0.12)',
+    leak: true,
+  },
+  mint: {
+    label: 'Mint Soda',
+    filter: 'saturate(0.92) contrast(0.9) brightness(1.07) hue-rotate(4deg)',
+    tint: 'rgba(140, 225, 195, 0.15)',
+    fade: 'rgba(230, 250, 240, 0.12)',
+    leak: false,
+  },
+  cinema: {
+    label: 'Cinema',
+    filter: 'contrast(1.08) saturate(1.12) brightness(1.02)',
+    tint: 'rgba(20, 130, 150, 0.12)',
+    fade: 'rgba(230, 240, 240, 0.04)',
+    blend: { color: 'rgba(255, 140, 60, 0.28)', op: 'soft-light' },
+    leak: false,
+  },
+  sepia: {
+    label: 'Old Sepia',
+    filter: 'sepia(0.85) contrast(0.88) brightness(1.06)',
+    tint: 'rgba(200, 150, 100, 0.10)',
+    fade: 'rgba(255, 240, 215, 0.14)',
+    grain: 0.1,
+    leak: false,
+  },
+  noir: {
+    label: 'Noir',
+    filter: 'grayscale(1) contrast(1.35) brightness(0.96)',
+    tint: 'rgba(0, 0, 0, 0)',
+    fade: 'rgba(0, 0, 0, 0)',
+    grain: 0.1,
+    leak: false,
   }
 };
+
+// ===========================================================
+//  STRIP STYLES — paper colors + patterns
+//  paper: [top, bottom] gradient · pattern: optional overlay
+//  ink: date text · accent: caption + brand · frame: photo border
+// ===========================================================
+const STRIPS = {
+  cream:   { label: 'Cream',      paper: ['#fdf6ee', '#fbeee0'], ink: '#7a6166', accent: '#b56a78', frame: '#fff' },
+  blush:   { label: 'Blush',      paper: ['#fbe1e6', '#f6cdd6'], ink: '#7a4f59', accent: '#b0566b', frame: '#fff' },
+  butter:  { label: 'Butter',     paper: ['#fdf3c8', '#f9e6a6'], ink: '#7a6a3f', accent: '#b4892f', frame: '#fff' },
+  sage:    { label: 'Sage',       paper: ['#e2ecdc', '#cfdfc6'], ink: '#4f6149', accent: '#5f7d55', frame: '#fff' },
+  sky:     { label: 'Sky',        paper: ['#e0ecf8', '#c9dcf1'], ink: '#4b5f78', accent: '#5a7fae', frame: '#fff' },
+  lilac:   { label: 'Lilac',      paper: ['#ece2f8', '#dccdf2'], ink: '#5f4f78', accent: '#8a6bb8', frame: '#fff' },
+  black:   { label: 'Classic Black', paper: ['#222023', '#141214'], ink: '#cfc4c7', accent: '#f1b8c4', frame: '#f4efe9' },
+  gingham: { label: 'Pink Gingham', paper: ['#fff7f8', '#fff3f5'], pattern: 'gingham', patternColor: 'rgba(240, 150, 170, 0.32)', ink: '#7a4f59', accent: '#b0566b', frame: '#fff' },
+  dots:    { label: 'Polka Dots', paper: ['#fbe1e6', '#f8d6de'], pattern: 'dots', patternColor: 'rgba(255, 255, 255, 0.85)', ink: '#7a4f59', accent: '#b0566b', frame: '#fff' },
+  stripes: { label: 'Candy Stripes', paper: ['#fffaf6', '#fff6f0'], pattern: 'stripes', patternColor: 'rgba(245, 170, 185, 0.45)', ink: '#7a4f59', accent: '#b0566b', frame: '#fff' },
+  hearts:  { label: 'Hearts',     paper: ['#fdeaee', '#fbdbe2'], pattern: 'hearts', patternColor: 'rgba(220, 110, 135, 0.38)', ink: '#7a4f59', accent: '#b0566b', frame: '#fff' },
+  stars:   { label: 'Starry Night', paper: ['#2b2f4f', '#1b1e36'], pattern: 'stars', patternColor: 'rgba(255, 236, 170, 0.75)', ink: '#c9cbe6', accent: '#ffe7a3', frame: '#f6f3ea' },
+  checker: { label: 'Butter Check', paper: ['#fffbe8', '#fff7da'], pattern: 'checker', patternColor: 'rgba(240, 205, 110, 0.45)', ink: '#7a6a3f', accent: '#b4892f', frame: '#fff' },
+};
+
+// paint paper + pattern into any canvas area (used by strip + swatches)
+function drawStripPaper(ctx, w, h, style, scale = 1) {
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, style.paper[0]);
+  g.addColorStop(1, style.paper[1]);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  if (!style.pattern) return;
+
+  ctx.save();
+  ctx.fillStyle = style.patternColor;
+  const u = 28 * scale; // pattern unit size
+  switch (style.pattern) {
+    case 'gingham':
+      for (let x = 0; x < w; x += u * 2) ctx.fillRect(x, 0, u, h);
+      for (let y = 0; y < h; y += u * 2) ctx.fillRect(0, y, w, u);
+      break;
+    case 'checker':
+      for (let y = 0, r = 0; y < h; y += u * 1.4, r++)
+        for (let x = (r % 2) * u * 1.4; x < w; x += u * 2.8) ctx.fillRect(x, y, u * 1.4, u * 1.4);
+      break;
+    case 'stripes':
+      for (let x = 0; x < w; x += u * 1.6) ctx.fillRect(x, 0, u * 0.8, h);
+      break;
+    case 'dots':
+      for (let y = u * 0.6, r = 0; y < h + u; y += u * 1.3, r++)
+        for (let x = (r % 2 ? u * 0.65 : 0) + u * 0.3; x < w + u; x += u * 1.3) {
+          ctx.beginPath(); ctx.arc(x, y, u * 0.24, 0, Math.PI * 2); ctx.fill();
+        }
+      break;
+    case 'hearts':
+      for (let y = u, r = 0; y < h + u; y += u * 2, r++)
+        for (let x = (r % 2 ? u : 0) + u * 0.5; x < w + u; x += u * 2) drawHeart(ctx, x, y, u * 0.55);
+      break;
+    case 'stars':
+      for (let i = 0; i < Math.ceil((w * h) / (u * u * 3)); i++) {
+        const x = rng(i * 3.1 + 1) * w, y = rng(i * 7.7 + 2) * h;
+        const r = (rng(i * 1.3 + 5) * 0.35 + 0.15) * u;
+        drawSparkle(ctx, x, y, r);
+      }
+      break;
+  }
+  ctx.restore();
+}
+
+function drawHeart(ctx, x, y, s) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.35);
+  ctx.bezierCurveTo(x - s * 1.1, y - s * 0.4, x - s * 0.4, y - s * 1.0, x, y - s * 0.35);
+  ctx.bezierCurveTo(x + s * 0.4, y - s * 1.0, x + s * 1.1, y - s * 0.4, x, y + s * 0.35);
+  ctx.fill();
+}
+
+function drawSparkle(ctx, x, y, r) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.quadraticCurveTo(x, y, x, y + r);
+  ctx.quadraticCurveTo(x, y, x - r, y);
+  ctx.quadraticCurveTo(x, y, x, y - r);
+  ctx.fill();
+}
+
+// build the strip style swatch row on the preview screen
+const stripStylesEl = document.getElementById('stripStyles');
+function buildStripSwatches() {
+  Object.entries(STRIPS).forEach(([key, style]) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 72;
+    drawStripPaper(c.getContext('2d'), 72, 72, style, 0.6);
+    const btn = document.createElement('button');
+    btn.className = 'swatch' + (key === state.strip ? ' active' : '');
+    btn.dataset.strip = key;
+    btn.title = style.label;
+    btn.setAttribute('aria-label', style.label + ' strip');
+    btn.style.backgroundImage = `url(${c.toDataURL()})`;
+    stripStylesEl.appendChild(btn);
+  });
+}
+buildStripSwatches();
+
+stripStylesEl.addEventListener('click', e => {
+  const btn = e.target.closest('.swatch');
+  if (!btn) return;
+  state.strip = btn.dataset.strip;
+  stripStylesEl.querySelectorAll('.swatch').forEach(b => b.classList.toggle('active', b === btn));
+  if (previewScreen.classList.contains('active')) renderStrip();
+});
 
 // preset chip handling (camera + preview)
 function bindPresetButtons(container) {
@@ -319,12 +475,9 @@ async function renderStrip() {
   stripCanvas.height = stripH;
   const ctx = stripCanvas.getContext('2d');
 
-  // paper background — soft cream
-  const paperGrad = ctx.createLinearGradient(0, 0, 0, stripH);
-  paperGrad.addColorStop(0, '#fdf6ee');
-  paperGrad.addColorStop(1, '#fbeee0');
-  ctx.fillStyle = paperGrad;
-  ctx.fillRect(0, 0, stripW, stripH);
+  // paper background — chosen strip color / pattern
+  const strip = STRIPS[state.strip] || STRIPS.cream;
+  drawStripPaper(ctx, stripW, stripH, strip);
 
   // soft paper texture noise
   drawPaperNoise(ctx, stripW, stripH, 0.04);
@@ -337,7 +490,7 @@ async function renderStrip() {
     const y = padTop + i * (photoH + gap);
 
     // film border (slight inner shadow ring)
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = strip.frame;
     ctx.fillRect(x - 4, y - 4, photoW + 8, photoH + 8);
 
     // apply filter via canvas filter property
@@ -354,10 +507,17 @@ async function renderStrip() {
     // fade (lifted blacks)
     ctx.fillStyle = preset.fade;
     ctx.fillRect(x, y, photoW, photoH);
+
+    // optional extra color grade (e.g. cinema orange highlights)
+    if (preset.blend) {
+      ctx.globalCompositeOperation = preset.blend.op;
+      ctx.fillStyle = preset.blend.color;
+      ctx.fillRect(x, y, photoW, photoH);
+    }
     ctx.restore();
 
     // film grain on each frame
-    drawGrain(ctx, x, y, photoW, photoH, 0.07);
+    drawGrain(ctx, x, y, photoW, photoH, preset.grain ?? 0.07);
 
     // very slight blur softness via second pass — done with shadow trick
     drawSoftness(ctx, x, y, photoW, photoH);
@@ -375,7 +535,7 @@ async function renderStrip() {
   }
 
   // bottom caption / branding
-  drawStripFooter(ctx, stripW, stripH, padBot);
+  drawStripFooter(ctx, stripW, stripH, padBot, strip);
 
   // export blob for share/download
   await new Promise(res => stripCanvas.toBlob(b => { state.stripBlob = b; res(); }, 'image/png'));
@@ -466,6 +626,8 @@ function drawLightLeak(ctx, x, y, w, h, corner, presetKey) {
     cool:   ['rgba(160,200,255,0.30)', 'rgba(180,210,240,0)'],
     washed: ['rgba(255,230,180,0.35)', 'rgba(255,240,220,0)'],
     bw:     ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)'],
+    golden: ['rgba(255,170,60,0.50)',  'rgba(255,140,40,0)'],
+    lavender:['rgba(200,160,255,0.40)', 'rgba(220,190,255,0)'],
   }[presetKey] || ['rgba(255,200,150,0.35)', 'rgba(255,200,150,0)'];
 
   ctx.save();
@@ -496,12 +658,12 @@ function drawVignette(ctx, x, y, w, h) {
 }
 
 // ---------- footer (caption + brand + date) ----------
-function drawStripFooter(ctx, stripW, stripH, padBot) {
+function drawStripFooter(ctx, stripW, stripH, padBot, strip) {
   const baseY = stripH - padBot + 20;
 
   // caption
   if (captionToggle.checked && captionInput.value.trim()) {
-    ctx.fillStyle = '#b56a78';
+    ctx.fillStyle = strip.accent;
     ctx.font = '700 38px "Caveat", cursive';
     ctx.textAlign = 'center';
     ctx.fillText(captionInput.value.trim(), stripW / 2, baseY + 12);
@@ -510,15 +672,17 @@ function drawStripFooter(ctx, stripW, stripH, padBot) {
   // date stamp
   const d = new Date();
   const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  ctx.fillStyle = '#7a6166';
+  ctx.fillStyle = strip.ink;
   ctx.font = '600 18px "Quicksand", sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(dateStr, stripW / 2, baseY + 50);
 
   // brand
-  ctx.fillStyle = '#d98b9a';
+  ctx.fillStyle = strip.accent;
+  ctx.globalAlpha = 0.8;
   ctx.font = '700 22px "Caveat", cursive';
   ctx.fillText('✦ filmae', stripW / 2, baseY + 78);
+  ctx.globalAlpha = 1;
 }
 
 // ===========================================================
